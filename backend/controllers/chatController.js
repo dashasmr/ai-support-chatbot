@@ -1,18 +1,29 @@
-async function handleChat(req, res) {
-  const userMessage = req.body?.message;
+const { generateAIResponse } = require("../services/aiService");
 
-  if (!userMessage) {
-    return res.status(400).json({
-      error: "Message is required",
+async function handleChat(req, res) {
+  try {
+    const userMessage = req.body?.message;
+
+    if (!userMessage) {
+      return res.status(400).json({
+        error: "Message is required",
+      });
+    }
+
+    console.log("User message:", userMessage);
+
+    const aiReply = await generateAIResponse(userMessage);
+
+    return res.json({
+      reply: aiReply,
+    });
+  } catch (error) {
+    console.error("Chat error:", error.message);
+
+    return res.status(500).json({
+      error: "Something went wrong while generating the AI response",
     });
   }
-
-  console.log("User message:", userMessage);
-
-  // Temporary response until AI integration is added
-  return res.json({
-    reply: "This is a fake AI response",
-  });
 }
 
 module.exports = {
