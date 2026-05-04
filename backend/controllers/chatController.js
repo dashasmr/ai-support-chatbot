@@ -1,28 +1,31 @@
+const {
+  generateAIResponse,
+  generateAIStream,
+} = require("../services/aiService");
+
 // Temporary in-memory storage for chat history
 const conversations = [];
 
-const { 
-    generateAIResponse, 
-    generateAIStream,
-  } = require("../services/aiService");
-
-
 async function handleChat(req, res) {
   try {
-    const userMessage = req.body?.message;
+    const chatMessages = req.body?.messages;
 
-    if (!userMessage) {
+    if (!chatMessages || !Array.isArray(chatMessages) || chatMessages.length === 0) {
       return res.status(400).json({
-        error: "Message is required",
+        error: "Messages are required",
       });
     }
 
+    const userMessage = chatMessages[chatMessages.length - 1].text;
     console.log("User message:", userMessage);
 
-    const aiReply = await generateAIResponse(userMessage);
+    const aiReply = await generateAIResponse(chatMessages);
 
-    conversations.push({ user: userMessage, ai: aiReply });
-    
+    conversations.push({
+      user: userMessage,
+      ai: aiReply,
+    });
+
     return res.json({
       reply: aiReply,
     });
@@ -36,14 +39,15 @@ async function handleChat(req, res) {
 }
 
 async function handleChatStream(req, res) {
-  const userMessage = req.body?.message;
+  const chatMessages = req.body?.messages;
 
-  if (!userMessage) {
+  if (!chatMessages || !Array.isArray(chatMessages) || chatMessages.length === 0) {
     return res.status(400).json({
-      error: "Message is required",
+      error: "Messages are required",
     });
   }
 
+  const userMessage = chatMessages[chatMessages.length - 1].text;
   console.log("Streaming user message:", userMessage);
 
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -51,17 +55,19 @@ async function handleChatStream(req, res) {
   res.setHeader("Connection", "keep-alive");
 
   try {
-    const stream = await generateAIStream(userMessage);
+    const stream = await generateAIStream(chatMessages);
 
-    for await (const event of stream) {
-      if (event.type === "response.output_text.delta") {
-        res.write(event.delta);
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) {
+        res.write(delta);
       }
     }
 
     res.end();
   } catch (error) {
     console.error("Streaming chat error:", error.message);
+
     res.write("Sorry, something went wrong while streaming the AI response.");
     res.end();
   }

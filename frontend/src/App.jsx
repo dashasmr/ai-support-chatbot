@@ -4,9 +4,16 @@ import ChatInput from "./components/ChatInput";
 
 function App() {
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [messages, setMessages] = useState(() => {
+    const savedMessages = localStorage.getItem("chatMessages");
 
+    if (savedMessages) {
+      return JSON.parse(savedMessages);
+    }
+
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -14,6 +21,10 @@ function App() {
       behavior: "smooth",
     });
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    localStorage.setItem("chatMessages", JSON.stringify(messages));
+  }, [messages]);
 
  async function handleSendMessage(event) {
   event.preventDefault();
@@ -45,7 +56,7 @@ function App() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        message: userMessage.text,
+        messages: [...messages, userMessage],
       }),
     });
 
@@ -98,10 +109,6 @@ function App() {
           {messages.map((message, index) => (
             <MessageBubble key={index} message={message} />
           ))}
-
-          {isLoading && (
-            <div className="message ai-message">AI is typing...</div>
-          )}
 
           <div ref={messagesEndRef} />
         </div>
