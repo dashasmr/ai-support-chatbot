@@ -15,6 +15,16 @@ User message: ${userMessage}`,
   return response.output_text;
 }
 
+async function generateAIStream(userMessage) {
+  return openai.responses.stream({
+    model: "gpt-4.1-mini",
+    input: `You are a helpful customer support assistant. Answer clearly and politely.
+
+User message: ${userMessage}`,
+  });
+}
+
 module.exports = {
   generateAIResponse,
+  generateAIStream,
 };

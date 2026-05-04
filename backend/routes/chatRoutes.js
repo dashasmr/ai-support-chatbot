@@ -1,10 +1,12 @@
 const express = require("express");
-const { handleChat } = require("../controllers/chatController");
+const {
+  handleChat,
+  handleChatStream,
+} = require("../controllers/chatController");
 
 const router = express.Router();
 
 router.post("/", handleChat);
+router.post("/stream", handleChatStream);
 
 module.exports = router;
-
-console.log("handleChat:", handleChat);
