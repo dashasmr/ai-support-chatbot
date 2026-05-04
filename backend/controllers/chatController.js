@@ -5,6 +5,7 @@ const {
 const {
   createConversation,
   getConversationHistory,
+  getConversationsForExport,
   getAnalytics,
 } = require("../repositories/conversationRepository");
 
@@ -20,9 +21,19 @@ function mapConversationRow(row) {
 
 async function getChatHistory(req, res) {
   try {
-    const rows = await getConversationHistory();
+    const limit = Math.min(Number.parseInt(req.query.limit, 10) || 20, 100);
+    const offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0);
+    const query = typeof req.query.query === "string" ? req.query.query.trim() : "";
+    const result = await getConversationHistory({ limit, offset, query });
+
     return res.json({
-      conversations: rows.map(mapConversationRow),
+      conversations: result.rows.map(mapConversationRow),
+      pagination: {
+        limit,
+        offset,
+        total: result.totalCount,
+        hasMore: offset + limit < result.totalCount,
+      },
     });
   } catch (error) {
     console.error("History error:", error.message);
@@ -32,15 +43,62 @@ async function getChatHistory(req, res) {
   }
 }
 
+function formatCsvCell(value) {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value);
+}
+
+function escapeCsvField(value) {
+  const text = formatCsvCell(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+async function getChatHistoryExport(req, res) {
+  try {
+    const query = typeof req.query.query === "string" ? req.query.query.trim() : "";
+    const from = typeof req.query.from === "string" ? req.query.from : undefined;
+    const to = typeof req.query.to === "string" ? req.query.to : undefined;
+    const maxRows = Math.min(Number.parseInt(req.query.max, 10) || 5000, 10000);
+
+    const rows = await getConversationsForExport({ query, from, to, maxRows });
+    const header = ["id", "user_text", "ai_text", "pair_count", "created_at"]
+      .map(escapeCsvField)
+      .join(",");
+    const body = rows
+      .map((row) =>
+        [row.id, row.user_text, row.ai_text, row.pair_count, row.created_at].map(escapeCsvField).join(",")
+      )
+      .join("\r\n");
+    const csv = `\uFEFF${header}\r\n${body}`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="conversations-export.csv"');
+    return res.send(csv);
+  } catch (error) {
+    console.error("History export error:", error.message);
+    return res.status(500).json({
+      error: "Failed to export chat history.",
+    });
+  }
+}
+
 async function getChatAnalytics(req, res) {
   try {
-    const analytics = await getAnalytics();
+    const from = typeof req.query.from === "string" ? req.query.from : undefined;
+    const to = typeof req.query.to === "string" ? req.query.to : undefined;
+    const analytics = await getAnalytics({ from, to });
 
     return res.json({
       conversationCount: analytics.conversationCount,
       averagePairCount: analytics.averagePairCount,
       messagesToday: analytics.messagesToday,
       conversationsByHour: analytics.conversationsByHour,
+      conversationsByDay: analytics.conversationsByDay,
       recentConversations: analytics.recentConversations.map(mapConversationRow),
     });
   } catch (error) {
@@ -139,5 +197,6 @@ module.exports = {
   handleChat,
   handleChatStream,
   getChatHistory,
+  getChatHistoryExport,
   getChatAnalytics,
 };

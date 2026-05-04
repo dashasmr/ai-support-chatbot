@@ -3,6 +3,7 @@ const {
   handleChat,
   handleChatStream,
   getChatHistory,
+  getChatHistoryExport,
   getChatAnalytics,
 } = require("../controllers/chatController");
 
@@ -29,6 +30,7 @@ function requireAdminKey(req, res, next) {
 
 router.post("/", handleChat);
 router.post("/stream", handleChatStream);
+router.get("/history/export", requireAdminKey, getChatHistoryExport);
 router.get("/history", requireAdminKey, getChatHistory);
 router.get("/analytics", requireAdminKey, getChatAnalytics);
 

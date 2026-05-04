@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import MessageBubble from "./components/MessageBubble";
 import ChatInput from "./components/ChatInput";
+import { API_BASE_URL } from "./apiBase";
 
 const INITIAL_ASSISTANT_MESSAGE = {
   role: "assistant",
@@ -30,10 +31,22 @@ function App() {
   const [adminKey, setAdminKey] = useState("");
   const [analytics, setAnalytics] = useState(null);
   const [history, setHistory] = useState([]);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const [historyLimit] = useState(10);
+  const [historyPagination, setHistoryPagination] = useState({
+    total: 0,
+    hasMore: false,
+  });
   const [adminError, setAdminError] = useState("");
   const [isAdminLoading, setIsAdminLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesRef = useRef(messages);
+  const historyStart = historyPagination.total === 0 ? 0 : historyOffset + 1;
+  const historyEnd = Math.min(historyOffset + history.length, historyPagination.total);
 
   useEffect(() => {
     if (viewMode !== "chat") {
@@ -68,7 +81,7 @@ function App() {
     const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     try {
-      const response = await fetch("http://localhost:5000/api/chat/stream", {
+      const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -162,7 +175,12 @@ function App() {
     localStorage.removeItem("chatMessages");
   }
 
-  async function loadAdminData() {
+  async function loadAdminData(overrides = {}) {
+    const nextOffset = overrides.offset ?? historyOffset;
+    const nextQuery = overrides.query ?? historyQuery;
+    const nextFromDate = overrides.fromDate ?? fromDate;
+    const nextToDate = overrides.toDate ?? toDate;
+
     if (!adminKey.trim()) {
       setAdminError("Please enter admin key.");
       return;
@@ -173,9 +191,26 @@ function App() {
 
     try {
       const headers = { "x-admin-key": adminKey.trim() };
+      const analyticsParams = new URLSearchParams();
+      const historyParams = new URLSearchParams();
+
+      if (nextFromDate) {
+        analyticsParams.set("from", `${nextFromDate}T00:00:00.000Z`);
+      }
+
+      if (nextToDate) {
+        analyticsParams.set("to", `${nextToDate}T23:59:59.999Z`);
+      }
+
+      historyParams.set("limit", String(historyLimit));
+      historyParams.set("offset", String(nextOffset));
+      if (nextQuery.trim()) {
+        historyParams.set("query", nextQuery.trim());
+      }
+
       const [analyticsResponse, historyResponse] = await Promise.all([
-        fetch("http://localhost:5000/api/chat/analytics", { headers }),
-        fetch("http://localhost:5000/api/chat/history", { headers }),
+        fetch(`${API_BASE_URL}/api/chat/analytics?${analyticsParams.toString()}`, { headers }),
+        fetch(`${API_BASE_URL}/api/chat/history?${historyParams.toString()}`, { headers }),
       ]);
 
       const analyticsPayload = await analyticsResponse.json();
@@ -191,10 +226,65 @@ function App() {
 
       setAnalytics(analyticsPayload);
       setHistory(historyPayload.conversations || []);
+      setHistoryOffset(nextOffset);
+      setHistoryPagination({
+        total: historyPayload.pagination?.total || 0,
+        hasMore: Boolean(historyPayload.pagination?.hasMore),
+      });
     } catch (error) {
       setAdminError(error.message || "Failed to load admin data.");
     } finally {
       setIsAdminLoading(false);
+    }
+  }
+
+  async function exportHistoryCsv() {
+    if (!adminKey.trim()) {
+      setAdminError("Please enter admin key.");
+      return;
+    }
+
+    setIsExporting(true);
+    setAdminError("");
+
+    try {
+      const params = new URLSearchParams();
+      if (historyQuery.trim()) {
+        params.set("query", historyQuery.trim());
+      }
+      if (fromDate) {
+        params.set("from", `${fromDate}T00:00:00.000Z`);
+      }
+      if (toDate) {
+        params.set("to", `${toDate}T23:59:59.999Z`);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/chat/history/export?${params.toString()}`, {
+        headers: { "x-admin-key": adminKey.trim() },
+      });
+
+      if (!response.ok) {
+        let message = "Export failed";
+        try {
+          const payload = await response.json();
+          message = payload.error || message;
+        } catch {
+          message = await response.text();
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `conversations-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setAdminError(error.message || "Export failed.");
+    } finally {
+      setIsExporting(false);
     }
   }
 
@@ -276,8 +366,33 @@ function App() {
                 value={adminKey}
                 onChange={(event) => setAdminKey(event.target.value)}
               />
-              <button type="button" onClick={loadAdminData} disabled={isAdminLoading}>
+              <button type="button" onClick={() => loadAdminData({ offset: 0 })} disabled={isAdminLoading}>
                 {isAdminLoading ? "Loading..." : "Load analytics"}
+              </button>
+            </div>
+            <div className="admin-filters">
+              <input
+                type="text"
+                placeholder="Search history (e.g. refund)"
+                value={historyQuery}
+                onChange={(event) => setHistoryQuery(event.target.value)}
+              />
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(event) => setFromDate(event.target.value)}
+              />
+              <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+              <button type="button" onClick={() => loadAdminData({ offset: 0 })} disabled={isAdminLoading}>
+                Apply filters
+              </button>
+              <button
+                type="button"
+                className="admin-export-button"
+                onClick={exportHistoryCsv}
+                disabled={isExporting || isAdminLoading}
+              >
+                {isExporting ? "Exporting…" : "Export CSV"}
               </button>
             </div>
 
@@ -316,10 +431,26 @@ function App() {
               </div>
 
               <div className="list-card">
+                <h3>Conversations by day</h3>
+                {analytics?.conversationsByDay?.length ? (
+                  <ul>
+                    {analytics.conversationsByDay.map((item) => (
+                      <li key={item.day}>
+                        <span>{item.day}</span>
+                        <strong>{item.count}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="empty-state">No data yet.</p>
+                )}
+              </div>
+
+              <div className="list-card">
                 <h3>Recent conversations</h3>
                 {history.length ? (
                   <ul className="recent-list">
-                    {history.slice(0, 10).map((item, index) => (
+                    {history.map((item, index) => (
                       <li key={`${item.createdAt || "no-date"}-${index}`}>
                         <p>
                           <strong>User:</strong> {item.user}
@@ -338,6 +469,35 @@ function App() {
                 ) : (
                   <p className="empty-state">No conversations yet.</p>
                 )}
+                <div className="history-pagination">
+                  <span>
+                    Showing {historyStart}-{historyEnd} of {historyPagination.total}
+                  </span>
+                  <div className="history-pagination-actions">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        loadAdminData({
+                          offset: Math.max(0, historyOffset - historyLimit),
+                        })
+                      }
+                      disabled={isAdminLoading || historyOffset === 0}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        loadAdminData({
+                          offset: historyOffset + historyLimit,
+                        })
+                      }
+                      disabled={isAdminLoading || !historyPagination.hasMore}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </section>

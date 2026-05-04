@@ -6,16 +6,60 @@ require("dotenv").config({
 });
 
 const chatRoutes = require("./routes/chatRoutes");
+const pool = require("./db/pool");
+
+function parseAllowedOrigins() {
+  const raw = process.env.FRONTEND_URL;
+  if (raw && raw.trim()) {
+    return raw
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+  }
+  return [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+  ];
+}
+
+const allowedOrigins = parseAllowedOrigins();
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+  })
+);
 app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({
     message: "AI Customer Support Backend is running",
   });
+});
+
+app.get("/health", async (req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    return res.json({ ok: true, database: "connected" });
+  } catch (error) {
+    return res.status(503).json({
+      ok: false,
+      database: "error",
+      error: error.message,
+    });
+  }
 });
 
 app.use("/api/chat", chatRoutes);
