@@ -2,14 +2,53 @@ const {
   generateAIResponse,
   generateAIStream,
 } = require("../services/aiService");
+const {
+  createConversation,
+  getConversationHistory,
+  getAnalytics,
+} = require("../repositories/conversationRepository");
 
-// Temporary in-memory storage for chat history
-const conversations = [];
+function mapConversationRow(row) {
+  return {
+    id: row.id,
+    user: row.user_text,
+    ai: row.ai_text,
+    pairCount: row.pair_count,
+    createdAt: row.created_at,
+  };
+}
 
-function getChatHistory(req, res) {
-  return res.json({
-    conversations,
-  });
+async function getChatHistory(req, res) {
+  try {
+    const rows = await getConversationHistory();
+    return res.json({
+      conversations: rows.map(mapConversationRow),
+    });
+  } catch (error) {
+    console.error("History error:", error.message);
+    return res.status(500).json({
+      error: "Failed to load chat history.",
+    });
+  }
+}
+
+async function getChatAnalytics(req, res) {
+  try {
+    const analytics = await getAnalytics();
+
+    return res.json({
+      conversationCount: analytics.conversationCount,
+      averagePairCount: analytics.averagePairCount,
+      messagesToday: analytics.messagesToday,
+      conversationsByHour: analytics.conversationsByHour,
+      recentConversations: analytics.recentConversations.map(mapConversationRow),
+    });
+  } catch (error) {
+    console.error("Analytics error:", error.message);
+    return res.status(500).json({
+      error: "Failed to load analytics.",
+    });
+  }
 }
 
 async function handleChat(req, res) {
@@ -27,9 +66,10 @@ async function handleChat(req, res) {
 
     const aiReply = await generateAIResponse(chatMessages);
 
-    conversations.push({
-      user: userMessage,
-      ai: aiReply,
+    await createConversation({
+      userText: userMessage,
+      aiText: aiReply,
+      pairCount: 1,
     });
 
     return res.json({
@@ -76,9 +116,10 @@ async function handleChatStream(req, res) {
       }
     }
 
-    conversations.push({
-      user: userMessage,
-      ai: fullReply,
+    await createConversation({
+      userText: userMessage,
+      aiText: fullReply,
+      pairCount: 1,
     });
 
     res.end();
@@ -98,4 +139,5 @@ module.exports = {
   handleChat,
   handleChatStream,
   getChatHistory,
+  getChatAnalytics,
 };
