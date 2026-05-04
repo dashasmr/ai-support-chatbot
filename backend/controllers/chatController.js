@@ -6,6 +6,12 @@ const {
 // Temporary in-memory storage for chat history
 const conversations = [];
 
+function getChatHistory(req, res) {
+  return res.json({
+    conversations,
+  });
+}
+
 async function handleChat(req, res) {
   try {
     const chatMessages = req.body?.messages;
@@ -40,8 +46,12 @@ async function handleChat(req, res) {
 
 async function handleChatStream(req, res) {
   const chatMessages = req.body?.messages;
+  const isValidMessages =
+    Array.isArray(chatMessages) &&
+    chatMessages.length > 0 &&
+    chatMessages.every((message) => typeof message?.text === "string");
 
-  if (!chatMessages || !Array.isArray(chatMessages) || chatMessages.length === 0) {
+  if (!isValidMessages) {
     return res.status(400).json({
       error: "Messages are required",
     });
@@ -56,24 +66,36 @@ async function handleChatStream(req, res) {
 
   try {
     const stream = await generateAIStream(chatMessages);
+    let fullReply = "";
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta?.content;
       if (delta) {
         res.write(delta);
+        fullReply += delta;
       }
     }
+
+    conversations.push({
+      user: userMessage,
+      ai: fullReply,
+    });
 
     res.end();
   } catch (error) {
     console.error("Streaming chat error:", error.message);
-
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: "Sorry, something went wrong while streaming the AI response.",
+      });
+    }
     res.write("Sorry, something went wrong while streaming the AI response.");
-    res.end();
+    return res.end();
   }
 }
 
 module.exports = {
   handleChat,
   handleChatStream,
+  getChatHistory,
 };
