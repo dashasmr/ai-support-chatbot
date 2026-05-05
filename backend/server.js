@@ -13,15 +13,22 @@ function parseAllowedOrigins() {
   if (raw && raw.trim()) {
     return raw
       .split(",")
-      .map((part) => part.trim())
+      .map((part) => normalizeOrigin(part))
       .filter(Boolean);
   }
   return [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:4173",
-    "http://127.0.0.1:4173",
+    normalizeOrigin("http://localhost:5173"),
+    normalizeOrigin("http://127.0.0.1:5173"),
+    normalizeOrigin("http://localhost:4173"),
+    normalizeOrigin("http://127.0.0.1:4173"),
   ];
+}
+
+function normalizeOrigin(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .toLowerCase();
 }
 
 const allowedOrigins = parseAllowedOrigins();
@@ -34,7 +41,8 @@ app.use(
       if (!origin) {
         return callback(null, true);
       }
-      if (allowedOrigins.includes(origin)) {
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (allowedOrigins.includes(normalizedOrigin)) {
         return callback(null, true);
       }
       return callback(null, false);
