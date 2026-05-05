@@ -31,6 +31,46 @@ function normalizeOrigin(value) {
     .toLowerCase();
 }
 
+function extractHostname(value) {
+  const normalized = normalizeOrigin(value);
+  if (!normalized) return "";
+  try {
+    return new URL(normalized).hostname.toLowerCase();
+  } catch {
+    try {
+      return new URL(`https://${normalized}`).hostname.toLowerCase();
+    } catch {
+      return normalized.replace(/^https?:\/\//, "").split("/")[0];
+    }
+  }
+}
+
+function isOriginAllowed(origin) {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) return true;
+
+  if (allowedOrigins.includes(normalizedOrigin)) {
+    return true;
+  }
+
+  const originHost = extractHostname(normalizedOrigin);
+  if (!originHost) return false;
+
+  // Allow exact host match even when FRONTEND_URL is entered without protocol.
+  const hostMatches = allowedOrigins.some((candidate) => {
+    const candidateHost = extractHostname(candidate);
+    return candidateHost && candidateHost === originHost;
+  });
+  if (hostMatches) return true;
+
+  // Convenience for Vercel previews in portfolio deployments.
+  if (originHost.endsWith(".vercel.app")) {
+    return true;
+  }
+
+  return false;
+}
+
 const allowedOrigins = parseAllowedOrigins();
 
 const app = express();
@@ -41,8 +81,7 @@ app.use(
       if (!origin) {
         return callback(null, true);
       }
-      const normalizedOrigin = normalizeOrigin(origin);
-      if (allowedOrigins.includes(normalizedOrigin)) {
+      if (isOriginAllowed(origin)) {
         return callback(null, true);
       }
       return callback(null, false);
