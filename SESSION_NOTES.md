@@ -6,41 +6,40 @@ Use this file as a quick memory between chats.
 
 - Date: 2026-05-05
 - Project: `ai-support-chatbot`
-- Main goal: deploy backend + frontend and keep a stable workflow.
+- Main goal: deployed app is live; finalize portfolio-ready state.
 
 ## What is done
 
 - Render PostgreSQL was created.
 - Render backend service was created.
+- Vercel frontend was deployed.
+- Backend `/health` endpoint responds successfully on Render.
 - Deployment flow was documented in `README.md` (Vercel + Render).
-- CORS setup is tied to `FRONTEND_URL` on backend.
+- Root cause of runtime error was fixed in deployment config:
+  - `VITE_API_URL` on Vercel incorrectly pointed to `localhost`
+  - updated to Render backend URL and redeployed frontend
+- Basic anti-abuse protection added on backend chat routes:
+  - per-IP rate limiting for `/api/chat` and `/api/chat/stream`
+  - configurable via `CHAT_RATE_LIMIT_WINDOW_MS` and `CHAT_RATE_LIMIT_MAX_REQUESTS`
 
 ## Current blocker / open tasks
 
-- Verify backend env vars in Render:
-  - `DATABASE_URL`
-  - `OPENAI_API_KEY`
-  - `ADMIN_API_KEY`
-  - `FRONTEND_URL` (temporary local URL now, replace after Vercel deploy)
-- Confirm backend health endpoint works:
-  - `https://<your-backend>.onrender.com/health`
-- Deploy frontend on Vercel (`frontend` root) with:
-  - `VITE_API_URL=https://<your-backend>.onrender.com`
-- Update Render backend:
-  - set `FRONTEND_URL=https://<your-frontend>.vercel.app`
-  - redeploy backend
+- No hard blocker right now.
+- Optional hardening:
+  - verify `FRONTEND_URL` in Render exactly matches production frontend URL
+  - add smoke-test checklist to README (optional)
 
 ## Next step (start here next time)
 
-1. Check Render backend logs and `/health`.
-2. Deploy frontend to Vercel and set `VITE_API_URL`.
-3. Update `FRONTEND_URL` in Render and redeploy.
-4. Run end-to-end smoke test (chat + admin endpoints).
+1. Run full smoke test (chat stream + admin analytics/history/export).
+2. Add real links below and save this file.
+3. Commit deployment notes + backend CORS improvements.
+4. Tag this as portfolio v1 deployment milestone.
 
 ## Important links
 
-- Backend URL: `TBD`
-- Frontend URL: `TBD`
+- Backend URL: `https://<your-backend>.onrender.com`
+- Frontend URL: `https://ai-support-chatbot-brown.vercel.app`
 - Render Postgres: `TBD`
 - Render Backend Service: `TBD`
 - Vercel Project: `TBD`

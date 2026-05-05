@@ -2,6 +2,22 @@
 
 Portfolio-style project: **streaming** AI chat, conversation persistence in **PostgreSQL**, an **admin dashboard** with analytics, and **CSV export** of history.
 
+## Live demo
+
+- Frontend: `https://ai-support-chatbot-brown.vercel.app`
+- Backend health: `https://ai-support-chatbot-ch4h.onrender.com/health`
+
+> Note: if backend is on a free/sleeping tier, the first request may be slower due to cold start.
+
+## Deployment status
+
+- [x] Frontend deployed on Vercel
+- [x] Backend deployed on Render
+- [x] PostgreSQL deployed on Render
+- [x] Frontend connected to backend via `VITE_API_URL`
+- [x] Backend CORS restricted via `FRONTEND_URL`
+- [x] Basic anti-abuse rate limiting on chat endpoints
+
 ## Why this architecture
 
 | Layer | Role |
@@ -71,6 +87,8 @@ npm run dev
 | `DATABASE_URL` | PostgreSQL connection string (`postgresql://user:pass@host:5432/dbname`). |
 | `PORT` | Express port (default `5000`). |
 | `FRONTEND_URL` | Allowed browser origins for CORS, comma-separated. If empty, local Vite URLs are allowed for development. |
+| `CHAT_RATE_LIMIT_WINDOW_MS` | Rate-limit window for chat endpoints in milliseconds (default `600000`, 10 minutes). |
+| `CHAT_RATE_LIMIT_MAX_REQUESTS` | Max chat requests per IP within one window (default `20`). |
 
 ### Frontend (`frontend/.env`)
 
@@ -181,6 +199,13 @@ This stack is common for portfolios: **static frontend on Vercel**, **Node API +
 - [ ] Chat streams and messages persist (refresh page / check admin history)  
 - [ ] Admin tab works with `x-admin-key` = your `ADMIN_API_KEY`  
 - [ ] README or repo description lists **live demo URL** + note that OpenAI usage is yours / rate limits
+
+## Cost and abuse protection
+
+- OpenAI key is used only on backend (never exposed in frontend bundle).
+- CORS is restricted with `FRONTEND_URL`, so only your frontend origin is allowed from browsers.
+- Chat endpoints use per-IP rate limiting (`429 Too Many Requests` on abuse).
+- For stronger protection later: add CAPTCHA and optional sign-in before chat usage.
 
 ---
 
